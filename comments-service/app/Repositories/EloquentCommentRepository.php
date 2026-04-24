@@ -19,41 +19,50 @@ class EloquentCommentRepository implements CommentRepositoryInterface
     public function createComment(int $postId, int $authorId, array $payload): array
     {
         $parentId = $payload['replyto_id'] ?? null;
+        $maxRetries = 3;
+        $attempt = 0;
 
-        $nextNumber = Comment::where('post_id', $postId)
-            ->lockForUpdate()
-            ->max('number');
+        while ($attempt < $maxRetries) {
+            try {
+                $nextNumber = Comment::where('post_id', $postId)
+                    ->lockForUpdate()
+                    ->max('number');
 
-        $nextNumber = ($nextNumber ?? 0) + 1;
+                $nextNumber = ($nextNumber ?? 0) + 1;
 
-        $comment = new Comment();
-        $comment->post_id = $postId;
-        $comment->replyto_id = $parentId;
-        $comment->author_id = $authorId;
-        $comment->body = $payload['body'];
-        $comment->status = $payload['status'] ?? 'published';
-        $comment->number = $nextNumber;
+                $comment = new Comment();
+                $comment->post_id = $postId;
+                $comment->replyto_id = $parentId;
+                $comment->author_id = $authorId;
+                $comment->body = $payload['body'];
+                $comment->status = $payload['status'] ?? 'published';
+                $comment->number = $nextNumber;
 
-        if ($parentId) {
-            $parent = Comment::where('id', $parentId)
-                ->lockForUpdate()
-                ->firstOrFail();
+                if ($parentId) {
+                    $parent = Comment::where('id', $parentId)
+                        ->lockForUpdate()
+                        ->firstOrFail();
 
-            $comment->level = $parent->level + 1;
-            $comment->path = sprintf('%s.%d', $parent->path, $nextNumber);
-            $parent->increment('children_count');
-        } else {
-            $comment->level = 1;
-            $comment->path = (string)$nextNumber;
+                    $comment->level = $parent->level + 1;
+                    $comment->path = sprintf('%s.%d', $parent->path, $nextNumber);
+                    $parent->increment('children_count');
+                } else {
+                    $comment->level = 1;
+                    $comment->path = (string)$nextNumber;
+                }
+
+                $comment->save();
+                return $comment->toArray();
+            } catch (QueryException $exception) {
+                if ($exception->getCode() === '23000' && $attempt < $maxRetries - 1) {
+                    $attempt++;
+                    continue;
+                }
+                throw $exception;
+            }
         }
 
-        try {
-            $comment->save();
-        } catch (QueryException $exception) {
-            throw $exception;
-        }
-
-        return $comment->toArray();
+        throw new \Exception('Failed to create comment after retries');
     }
 
     public function findComment(int $commentId): array

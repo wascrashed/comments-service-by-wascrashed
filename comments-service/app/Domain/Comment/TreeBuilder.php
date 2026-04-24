@@ -26,8 +26,17 @@ class TreeBuilder
             $roots = array_map(fn($node) => $this->shallowNode($node), $roots);
         }
 
+        // Paginate roots
         $offset = ($page - 1) * $perPage;
-        return array_slice($roots, $offset, $perPage);
+        $paginatedRoots = array_slice($roots, $offset, $perPage);
+
+        return [
+            'data' => $paginatedRoots,
+            'current_page' => $page,
+            'per_page' => $perPage,
+            'total' => count($roots),
+            'last_page' => ceil(count($roots) / $perPage),
+        ];
     }
 
     private function shallowNode(array $node): array

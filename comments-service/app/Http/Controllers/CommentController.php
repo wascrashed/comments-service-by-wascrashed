@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCommentRequest;
 use App\Http\Requests\UpdateCommentRequest;
+use App\Http\Resources\CommentResource;
 use App\Services\CommentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,21 +35,21 @@ class CommentController extends Controller
             $request->validated()
         );
 
-        return response()->json($comment, 201);
+        return new CommentResource($comment);
     }
 
     public function show(int $comment): JsonResponse
     {
         $comment = $this->comments->getComment($comment);
 
-        return response()->json($comment);
+        return new CommentResource($comment);
     }
 
     public function update(UpdateCommentRequest $request, int $comment): JsonResponse
     {
         $updated = $this->comments->updateComment($comment, $request->validated());
 
-        return response()->json($updated);
+        return new CommentResource($updated);
     }
 
     public function destroy(int $comment): JsonResponse
