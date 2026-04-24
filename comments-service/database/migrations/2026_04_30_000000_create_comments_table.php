@@ -13,6 +13,7 @@ return new class extends Migration
             $table->unsignedBigInteger('post_id');
             $table->unsignedBigInteger('replyto_id')->nullable();
             $table->unsignedBigInteger('author_id');
+            $table->unsignedInteger('number');
             $table->string('path')->index();
             $table->unsignedSmallInteger('level')->default(1);
             $table->string('status')->default('published');
@@ -20,6 +21,7 @@ return new class extends Migration
             $table->unsignedInteger('children_count')->default(0);
             $table->timestamps();
 
+            $table->unique(['post_id', 'number']);
             $table->unique(['post_id', 'path']);
             $table->index(['post_id', 'replyto_id']);
         });

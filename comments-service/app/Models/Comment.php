@@ -16,6 +16,7 @@ class Comment extends Model
         'body',
         'path',
         'level',
+        'number',
         'status',
     ];
 

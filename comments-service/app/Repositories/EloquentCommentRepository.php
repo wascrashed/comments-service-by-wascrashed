@@ -19,20 +19,32 @@ class EloquentCommentRepository implements CommentRepositoryInterface
     public function createComment(int $postId, int $authorId, array $payload): array
     {
         $parentId = $payload['replyto_id'] ?? null;
+
+        $nextNumber = Comment::where('post_id', $postId)
+            ->lockForUpdate()
+            ->max('number');
+
+        $nextNumber = ($nextNumber ?? 0) + 1;
+
         $comment = new Comment();
         $comment->post_id = $postId;
         $comment->replyto_id = $parentId;
         $comment->author_id = $authorId;
         $comment->body = $payload['body'];
         $comment->status = $payload['status'] ?? 'published';
+        $comment->number = $nextNumber;
 
         if ($parentId) {
-            $parent = Comment::findOrFail($parentId);
+            $parent = Comment::where('id', $parentId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             $comment->level = $parent->level + 1;
-            $comment->path = $parent->path . '.' . ($parent->children_count + 1);
+            $comment->path = sprintf('%s.%d', $parent->path, $nextNumber);
+            $parent->increment('children_count');
         } else {
             $comment->level = 1;
-            $comment->path = (Comment::where('post_id', $postId)->max('id') ?? 0) + 1;
+            $comment->path = (string)$nextNumber;
         }
 
         try {
