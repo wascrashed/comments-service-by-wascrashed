@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  app:
+    image: php:8.2-fpm
+    container_name: comments_service_app
+    volumes:
+      - ./comments-service:/var/www/html
+    working_dir: /var/www/html
+    depends_on:
+      - db
+    networks:
+      - comments_net
+
+  web:
+    image: nginx:stable-alpine
+    container_name: comments_service_web
+    ports:
+      - "8080:80"
+    volumes:
+      - ./comments-service:/var/www/html
+      - ./comments-service/docker/nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - app
+    networks:
+      - comments_net
+
+  db:
+    image: mysql:8.0
+    container_name: comments_service_db
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: comments_service
+      MYSQL_USER: user
+      MYSQL_PASSWORD: secret
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - comments_net
+
+networks:
+  comments_net:
+    driver: bridge
+
+volumes:
+  db_data:
