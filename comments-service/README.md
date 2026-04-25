@@ -9,21 +9,47 @@
 - моделировать высокую нагрузку и read-heavy паттерны
 - сделать проект удобным для коммерческого демо
 
-## Структура
+## Архитектура
 
-- `app/Http/Controllers` — контроллеры API
-- `app/Services` — бизнес-логика и use case
-- `app/Repositories` — абстракция доступа к данным
-- `app/Domain/Comment` — доменный слой и сборка дерева
-- `app/Models` — Eloquent-модели
-- `database/migrations` — схема таблицы
-- `routes/api.php` — маршруты API
-- `tests` — feature и unit тесты
+- **Controller/API**: HTTP, валидация, ресурсы
+- **Service / Use Case**: бизнес-логика, кеширование, транзакции
+- **Repository**: абстракция данных, retry-логика
+- **Domain**: сборка дерева, бизнес-правила
+- **Model**: Eloquent, миграции
 
-## Как использовать
+## Ключевые фичи
 
-1. Установите PHP, Composer и Laravel.
-2. Запустите `composer install` в `comments-service`.
-3. Скопируйте `.env.example` в `.env`.
-4. Настройте БД и выполните `php artisan migrate`.
-5. Запустите `php artisan serve` или Docker Compose.
+- Materialized path для дерева комментариев
+- Кеширование hot threads (5 мин TTL)
+- Пагинация корней с lazy children
+- Retry-логика при unique constraint violations
+- API Resources для структурированных ответов
+- Тесты: unit + feature с фабриками
+
+## API
+
+- `GET /api/posts/{id}/comments?page=1&per_page=20&expand=false`
+- `POST /api/posts/{id}/comments` — создать комментарий
+- `GET /api/comments/{id}` — получить комментарий
+- `PATCH /api/comments/{id}` — обновить
+- `DELETE /api/comments/{id}` — удалить
+
+## Запуск
+
+1. `composer install`
+2. `cp .env.example .env`
+3. `php artisan key:generate`
+4. `php artisan migrate`
+5. `php artisan serve`
+
+Для Docker: `docker-compose up`
+
+## Тесты
+
+`php artisan test`
+
+## Производительность
+
+- Read p95 < 250ms для дерева
+- Write с транзакциями и lock
+- Кеш invalidation при изменениях
