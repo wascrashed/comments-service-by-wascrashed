@@ -35,21 +35,21 @@ class CommentController extends Controller
             $request->validated()
         );
 
-        return new CommentResource($comment);
+        return (new CommentResource($comment))->response()->setStatusCode(201);
     }
 
     public function show(int $comment): JsonResponse
     {
         $comment = $this->comments->getComment($comment);
 
-        return new CommentResource($comment);
+        return (new CommentResource($comment))->response();
     }
 
     public function update(UpdateCommentRequest $request, int $comment): JsonResponse
     {
         $updated = $this->comments->updateComment($comment, $request->validated());
 
-        return new CommentResource($updated);
+        return (new CommentResource($updated))->response();
     }
 
     public function destroy(int $comment): JsonResponse

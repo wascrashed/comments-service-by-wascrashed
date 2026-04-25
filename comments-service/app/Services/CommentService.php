@@ -9,6 +9,8 @@ use Illuminate\Database\DatabaseManager;
 
 class CommentService
 {
+    private const CACHE_TTL = 300;
+
     public function __construct(
         private CommentRepositoryInterface $comments,
         private TreeBuilder $treeBuilder,
@@ -19,9 +21,9 @@ class CommentService
 
     public function getTreeForPost(int $postId, int $page, int $perPage, bool $expand): array
     {
-        $cacheKey = "comments:post:{$postId}:page:{$page}:per_page:{$perPage}:expand:" . ($expand ? '1' : '0');
+        $cacheKey = $this->buildCacheKey($postId, $page, $perPage, $expand);
 
-        return $this->cache->remember($cacheKey, 300, function () use ($postId, $page, $perPage, $expand) {
+        return $this->cache->remember($cacheKey, self::CACHE_TTL, function () use ($postId, $page, $perPage, $expand) {
             $comments = $this->comments->fetchCommentsForPost($postId);
             return $this->treeBuilder->buildTree($comments, $page, $perPage, $expand);
         });
@@ -33,8 +35,7 @@ class CommentService
             return $this->comments->createComment($postId, $authorId, $payload);
         });
 
-        // Invalidate cache for this post
-        $this->cache->forget("comments:post:{$postId}:*");
+        $this->incrementTreeVersion($postId);
 
         return $result;
     }
@@ -46,13 +47,12 @@ class CommentService
 
     public function updateComment(int $commentId, array $payload): array
     {
+        $comment = $this->comments->findComment($commentId);
         $result = $this->database->transaction(function () use ($commentId, $payload) {
             return $this->comments->updateComment($commentId, $payload);
         });
 
-        // Invalidate cache for the post of this comment
-        $comment = $this->comments->findComment($commentId);
-        $this->cache->forget("comments:post:{$comment['post_id']}:*");
+        $this->incrementTreeVersion($comment['post_id']);
 
         return $result;
     }
@@ -65,7 +65,25 @@ class CommentService
             $this->comments->deleteComment($commentId);
         });
 
-        // Invalidate cache for the post
-        $this->cache->forget("comments:post:{$comment['post_id']}:*");
+        $this->incrementTreeVersion($comment['post_id']);
+    }
+
+    private function buildCacheKey(int $postId, int $page, int $perPage, bool $expand): string
+    {
+        $version = $this->cache->get($this->getVersionKey($postId), 1);
+
+        return sprintf('comments:post:%d:v%d:page:%d:per_page:%d:expand:%d', $postId, $version, $page, $perPage, $expand ? 1 : 0);
+    }
+
+    private function incrementTreeVersion(int $postId): void
+    {
+        $key = $this->getVersionKey($postId);
+        $version = $this->cache->get($key, 1);
+        $this->cache->put($key, $version + 1, 86400);
+    }
+
+    private function getVersionKey(int $postId): string
+    {
+        return sprintf('comments:post:%d:version', $postId);
     }
 }

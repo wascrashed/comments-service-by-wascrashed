@@ -9,7 +9,7 @@ class CommentResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return [
+        $data = [
             'id' => $this->id,
             'post_id' => $this->post_id,
             'replyto_id' => $this->replyto_id,
@@ -22,7 +22,14 @@ class CommentResource extends JsonResource
             'children_count' => $this->children_count,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-            'children' => CommentResource::collection($this->whenLoaded('children')),
         ];
+
+        if (isset($this->children) && is_array($this->children)) {
+            $data['children'] = array_map(fn($child) => (new self($child))->toArray($request), $this->children);
+        } else {
+            $data['children'] = [];
+        }
+
+        return $data;
     }
 }
