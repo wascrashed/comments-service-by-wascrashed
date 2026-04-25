@@ -24,8 +24,11 @@ class CommentService
         $cacheKey = $this->buildCacheKey($postId, $page, $perPage, $expand);
 
         return $this->cache->remember($cacheKey, self::CACHE_TTL, function () use ($postId, $page, $perPage, $expand) {
-            $comments = $this->comments->fetchCommentsForPost($postId);
-            return $this->treeBuilder->buildTree($comments, $page, $perPage, $expand);
+            $rootComments = $this->comments->fetchRootCommentsForPost($postId, $page, $perPage);
+            $totalRoots = $this->comments->countRootCommentsForPost($postId);
+            $children = $expand ? $this->comments->fetchDescendantsForRootPaths($postId, array_column($rootComments, 'path')) : [];
+
+            return $this->treeBuilder->buildTree($rootComments, $children, $page, $perPage, $expand, $totalRoots);
         });
     }
 
@@ -48,6 +51,7 @@ class CommentService
     public function updateComment(int $commentId, array $payload): array
     {
         $comment = $this->comments->findComment($commentId);
+
         $result = $this->database->transaction(function () use ($commentId, $payload) {
             return $this->comments->updateComment($commentId, $payload);
         });

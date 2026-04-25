@@ -7,9 +7,39 @@ use Illuminate\Database\QueryException;
 
 class EloquentCommentRepository implements CommentRepositoryInterface
 {
-    public function fetchCommentsForPost(int $postId): array
+    public function fetchRootCommentsForPost(int $postId, int $page, int $perPage): array
+    {
+        $offset = ($page - 1) * $perPage;
+
+        return Comment::where('post_id', $postId)
+            ->whereNull('replyto_id')
+            ->orderBy('path')
+            ->offset($offset)
+            ->limit($perPage)
+            ->get()
+            ->map(fn(Comment $comment) => $comment->toArray())
+            ->all();
+    }
+
+    public function countRootCommentsForPost(int $postId): int
     {
         return Comment::where('post_id', $postId)
+            ->whereNull('replyto_id')
+            ->count();
+    }
+
+    public function fetchDescendantsForRootPaths(int $postId, array $rootPaths): array
+    {
+        if (empty($rootPaths)) {
+            return [];
+        }
+
+        return Comment::where('post_id', $postId)
+            ->where(function ($query) use ($rootPaths) {
+                foreach ($rootPaths as $path) {
+                    $query->orWhere('path', 'like', $path . '.%');
+                }
+            })
             ->orderBy('path')
             ->get()
             ->map(fn(Comment $comment) => $comment->toArray())
@@ -43,21 +73,24 @@ class EloquentCommentRepository implements CommentRepositoryInterface
                         ->lockForUpdate()
                         ->firstOrFail();
 
+                    $childIndex = $parent->children_count + 1;
                     $comment->level = $parent->level + 1;
-                    $comment->path = sprintf('%s.%d', $parent->path, $nextNumber);
+                    $comment->path = sprintf('%s.%d', $parent->path, $childIndex);
                     $parent->increment('children_count');
                 } else {
                     $comment->level = 1;
-                    $comment->path = (string)$nextNumber;
+                    $comment->path = (string) $nextNumber;
                 }
 
                 $comment->save();
+
                 return $comment->toArray();
             } catch (QueryException $exception) {
                 if ($exception->getCode() === '23000' && $attempt < $maxRetries - 1) {
                     $attempt++;
                     continue;
                 }
+
                 throw $exception;
             }
         }
@@ -82,6 +115,11 @@ class EloquentCommentRepository implements CommentRepositoryInterface
     public function deleteComment(int $commentId): void
     {
         $comment = Comment::findOrFail($commentId);
+
+        if ($comment->replyto_id) {
+            Comment::where('id', $comment->replyto_id)->decrement('children_count');
+        }
+
         $comment->delete();
     }
 }

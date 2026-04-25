@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCommentRequest;
 use App\Http\Requests\UpdateCommentRequest;
+use App\Http\Resources\CommentCollection;
 use App\Http\Resources\CommentResource;
 use App\Services\CommentService;
 use Illuminate\Http\JsonResponse;
@@ -21,10 +22,12 @@ class CommentController extends Controller
             $post,
             $request->query('page', 1),
             $request->query('per_page', 20),
-            $request->query('expand', false)
+            $request->boolean('expand', false)
         );
 
-        return response()->json($comments);
+        return (new CommentCollection(collect($comments['data'])))->additional([
+            'meta' => $comments['meta'],
+        ])->response();
     }
 
     public function store(StoreCommentRequest $request, int $post): JsonResponse
